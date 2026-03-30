@@ -8,6 +8,13 @@ from processing import process_data
 from ml_model import detect_danger_zones, add_risk_score
 from alerts import send_alert
 
+try:
+    import folium
+except:
+    import subprocess
+    subprocess.check_call(["pip", "install", "folium"])
+    import folium
+
 st.set_page_config(layout="wide")
 
 # 🎨 FIX PANTALLA BLANCA + ESTILO
