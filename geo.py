@@ -1,48 +1,23 @@
-import os
 import random
-import googlemaps
 
-# 🔐 API KEY desde variables de entorno (PRO)
-API_KEY = os.getenv("AIzaSyB7tnuyw9y6kgB38PZ136kdG7jk4gckh4g")
+# 🌍 Coordenadas simples por país (OSINT style)
+COUNTRY_COORDS = {
+    "Mexico": (23.6345, -102.5528),
+    "USA": (37.0902, -95.7129),
+    "France": (46.6034, 1.8883),
+    "Germany": (51.1657, 10.4515),
+    "Japan": (36.2048, 138.2529),
+    "Brazil": (-14.2350, -51.9253),
+    "Ukraine": (48.3794, 31.1656)
+}
 
-# Inicializar cliente solo si hay API key
-gmaps = None
-if API_KEY:
-    try:
-        gmaps = googlemaps.Client(key=API_KEY)
-    except:
-        gmaps = None
+def get_coordinates_google(country):
 
+    if country in COUNTRY_COORDS:
+        return COUNTRY_COORDS[country]
 
-def get_coordinates_google(location):
-    """
-    Obtiene coordenadas reales con Google Maps.
-    Si falla, usa fallback para que la app nunca se rompa.
-    """
-
-    # 🔥 1. Intentar Google Maps real
-    if gmaps:
-        try:
-            result = gmaps.geocode(location)
-
-            if result:
-                lat = result[0]["geometry"]["location"]["lat"]
-                lon = result[0]["geometry"]["location"]["lng"]
-                return lat, lon
-
-        except:
-            pass
-
-    # 🔁 2. FALLBACK (NUNCA CRASHEA)
-    return get_mock_coordinates()
-
-
-def get_mock_coordinates():
-    """
-    Coordenadas fake para evitar que la app falle
-    """
-
+    # fallback random (para no romper app)
     return (
-        random.uniform(-90, 90),
-        random.uniform(-180, 180)
+        random.uniform(-50, 50),
+        random.uniform(-100, 100)
     )
