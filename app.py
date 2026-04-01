@@ -1,139 +1,102 @@
 import streamlit as st
 import folium
-from folium.plugins import HeatMap
+from folium.plugins import HeatMap, MarkerCluster
 from streamlit_folium import st_folium
 
 from data_fetch import get_gdelt_data
 from processing import process_data
-from ml_model import detect_danger_zones, add_risk_score
-from alerts import send_alert
-
-try:
-    import folium
-except:
-    import subprocess
-    subprocess.check_call(["pip", "install", "folium"])
-    import folium
+from ml_model import run_full_analysis
+from alerts import send_unique_alert
+from storage import save_events, load_events
 
 st.set_page_config(layout="wide")
 
-# 🎨 FIX PANTALLA BLANCA + ESTILO
-st.markdown("""
-<style>
-iframe { pointer-events: auto !important; }
-.stApp { background-color: #0e1117; color: white; }
-</style>
-""", unsafe_allow_html=True)
+st.title("🌍 Global Risk Sentinel")
 
-# 🌐 IDIOMA
-language = st.sidebar.selectbox("🌐 Language", ["English", "Español"])
-
-# 🧠 TEXTOS
-if language == "English":
-    title = "🌍 Global Risk Sentinel"
-    alert_text = "⚠️ Active Risk"
-    danger_text = "🔥 Danger Zone"
-    btn_text = "Send Alert"
-    source_text = "View Source"
-else:
-    title = "🌍 Global Risk Sentinel"
-    alert_text = "⚠️ Riesgo Activo"
-    danger_text = "🔥 Zona Peligrosa"
-    btn_text = "Enviar Alerta"
-    source_text = "Ver Fuente"
-
-st.title(title)
-
-# 🔄 REFRESH
-if st.button("🔄 Refresh"):
-    st.cache_data.clear()
-    st.session_state.clear()
-
-# 📡 DATA
+# DATA
 articles = get_gdelt_data()
 df = process_data(articles)
+df = run_full_analysis(df)
 
-if df.empty:
-    st.warning("No data available")
-    st.stop()
+# 🔥 LIMPIEZA (CLAVE)
+df = df.dropna(subset=["lat", "lon"])
 
-# 🧠 IA
-df = detect_danger_zones(df)
-df = add_risk_score(df)
+# SAVE
+save_events(df)
+history = load_events()
 
-# 🔥 TICKER (NOTICIAS EN VIVO)
-st.markdown("### 🚨 Live Global Alerts")
+# DASHBOARD
+st.subheader("📊 Intelligence Overview")
+col1, col2, col3 = st.columns(3)
+col1.metric("Events", len(df))
+col2.metric("High Risk", len(df[df["risk_score"] >= 4]))
+col3.metric("Stored", len(history))
 
-ticker_text = "  |  ".join(df["title"].tolist())
+# FILTER
+min_risk = st.sidebar.slider("Minimum Risk", 0, 5, 2)
+df = df[df["risk_score"] >= min_risk]
 
-st.markdown(f"""
-<marquee behavior="scroll" direction="left" scrollamount="6">
-{ticker_text}
-</marquee>
-""", unsafe_allow_html=True)
-
-# 🌍 MAPA (ESTABLE)
-@st.cache_data
+# MAP
 def generate_map(df):
+
+    if df.empty:
+        return folium.Map(location=[0, 0], zoom_start=2)
 
     center_lat = df["lat"].mean()
     center_lon = df["lon"].mean()
 
-    m = folium.Map(location=[center_lat, center_lon], zoom_start=3)
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=3,
+        tiles="cartodb dark_matter"
+    )
 
-    heat_data = []
+    cluster = MarkerCluster().add_to(m)
 
-    for _, row in df.iterrows():
+    for _, r in df.iterrows():
 
-        intensity = 3 if row["alert"] else 1
-        heat_data.append([row["lat"], row["lon"], intensity])
+        if r["risk_score"] >= 4:
+            color = "red"
+        elif r["risk_score"] >= 2:
+            color = "orange"
+        else:
+            color = "blue"
+
+        if r.get("coordination_flag"):
+            color = "purple"
 
         folium.CircleMarker(
-            location=[row["lat"], row["lon"]],
-            radius=10 if row["alert"] else 6,
-            color="red" if row["alert"] else "blue",
+            location=[r["lat"], r["lon"]],
+            radius=6 + r["risk_score"],
+            color=color,
             fill=True,
-            fill_opacity=0.8,
-            popup=f"{row['title']}"
-        ).add_to(m)
-
-    HeatMap(heat_data).add_to(m)
+            fill_opacity=0.9,
+            popup=r["title"]
+        ).add_to(cluster)
 
     return m
 
+st.subheader("🌍 Global Intelligence Map")
+st_folium(generate_map(df), height=500)
 
-# 🛑 EVITA PARPADEO
-if "map" not in st.session_state:
-    st.session_state["map"] = generate_map(df)
+# ALERTS
+for _, r in df[df["risk_score"] >= 4].iterrows():
+    send_unique_alert(r["title"])
 
-st.subheader("🌍 Global Heatmap")
-st_folium(st.session_state["map"], height=500)
+# FEED
+st.subheader("📰 Intelligence Feed")
 
-# 📰 FEED
-st.subheader("📰 Live Feed")
+for _, r in df.iterrows():
 
-for i, row in df.iterrows():
+    st.markdown(f"### {r['title']}")
+    st.caption(r["country"])
 
-    with st.container():
+    if r["risk_score"] >= 4:
+        st.error("🔥 HIGH RISK")
+    elif r["risk_score"] >= 2:
+        st.warning("⚠️ MEDIUM RISK")
+    else:
+        st.info("🟢 LOW RISK")
 
-        st.markdown(f"### {row['title']}")
-        st.caption(f"📍 {row['country']}")
-
-        if row["danger_zone"]:
-            st.error(danger_text)
-        elif row["alert"]:
-            st.warning(alert_text)
-
-        # 📊 RIESGO
-        st.progress(min(row["risk_score"] / 5, 1.0))
-
-        # 🔗 LINKS
-        st.markdown(f"[🌐 {source_text}]({row['url']})")
-        st.markdown(f"[📍 Open in Maps](https://www.google.com/maps?q={row['lat']},{row['lon']})")
-
-        # 🚨 ALERTA
-        if st.button(f"{btn_text} {i}"):
-            send_alert(f"🚨 {row['title']} - {row['country']}")
-            st.success("Alert sent")
-
-        st.markdown("---")
+    st.markdown(r["url"])
+    st.markdown("---")

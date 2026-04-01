@@ -1,0 +1,4 @@
+title,country,url,lat,lon,alert,keyword_count,geo_cluster,danger_zone,text_similarity,keyword_risk,coordination_flag,risk_score
+coordinated protest activity detected,Germany,https://news.google.com/search?q=Coordinated+protest+activity+detected,-33.565831812163594,17.06349185335708,True,1,-1,False,0.3333333333333333,0,False,2.6666666666666665
+multiple explosions reported,Brazil,https://news.google.com/search?q=Multiple+explosions+reported,55.16094721291,-74.4585350663454,True,1,-1,False,0.3333333333333334,1,False,3.666666666666667
+rising conflict signals in region,Middle East,https://news.google.com/search?q=Rising+conflict+signals+in+region,-86.39245843666755,-117.00226731657092,True,1,-1,False,0.3333333333333333,1,False,3.6666666666666665
